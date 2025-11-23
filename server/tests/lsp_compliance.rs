@@ -109,6 +109,7 @@ fn test_completion_params_structure() {
 fn test_completion_item_structure() {
     let item = CompletionItem {
         label: "Convert to HTML".to_string(),
+        label_details: None,
         kind: Some(CompletionItemKind::TEXT),
         detail: Some("Convert document to HTML".to_string()),
         documentation: None,

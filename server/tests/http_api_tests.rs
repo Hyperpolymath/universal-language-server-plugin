@@ -66,11 +66,11 @@ fn test_api_error_response_serialization() {
 
 #[test]
 fn test_conversion_request_deserialization() {
-    let json = r#"{
+    let json = r##"{
         "content": "# Test",
         "from": "markdown",
         "to": "html"
-    }"#;
+    }"##;
 
     let request: serde_json::Value = serde_json::from_str(json).unwrap();
     assert_eq!(request["content"], "# Test");

@@ -18,64 +18,13 @@
 #![deny(clippy::all)]
 #![warn(clippy::pedantic)]
 
-mod core;
-mod document_store;
-mod http;
-mod lsp;
-mod websocket;
-
 use anyhow::Result;
 use std::sync::Arc;
 use tokio::task::JoinSet;
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 
-use crate::document_store::DocumentStore;
-
-/// Main server configuration
-#[derive(Debug, Clone)]
-pub struct ServerConfig {
-    /// HTTP server bind address
-    pub http_addr: String,
-    /// WebSocket server bind address
-    pub ws_addr: String,
-    /// Enable LSP server (stdio)
-    pub enable_lsp: bool,
-    /// Enable HTTP server
-    pub enable_http: bool,
-    /// Enable WebSocket server
-    pub enable_websocket: bool,
-}
-
-impl Default for ServerConfig {
-    fn default() -> Self {
-        Self {
-            http_addr: "0.0.0.0:8080".to_string(),
-            ws_addr: "0.0.0.0:8081".to_string(),
-            enable_lsp: true,
-            enable_http: true,
-            enable_websocket: true,
-        }
-    }
-}
-
-/// Shared server state
-pub struct ServerState {
-    /// Document store (thread-safe, lock-free)
-    pub documents: Arc<DocumentStore>,
-    /// Server configuration
-    pub config: ServerConfig,
-}
-
-impl ServerState {
-    /// Create new server state
-    fn new(config: ServerConfig) -> Self {
-        Self {
-            documents: Arc::new(DocumentStore::new()),
-            config,
-        }
-    }
-}
+use universal_connector_server::{http, lsp, websocket, ServerConfig, ServerState};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -96,6 +45,8 @@ async fn main() -> Result<()> {
         enable_lsp: std::env::var("ENABLE_LSP").unwrap_or_else(|_| "true".to_string()) == "true",
         enable_http: std::env::var("ENABLE_HTTP").unwrap_or_else(|_| "true".to_string()) == "true",
         enable_websocket: std::env::var("ENABLE_WS").unwrap_or_else(|_| "true".to_string()) == "true",
+        jwt_secret: std::env::var("JWT_SECRET").unwrap_or_else(|_| "dev-secret-change-in-production".to_string()),
+        enable_auth: std::env::var("ENABLE_AUTH").unwrap_or_else(|_| "false".to_string()) == "true",
     };
 
     info!("📋 Configuration: {:?}", config);

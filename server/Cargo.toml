@@ -6,6 +6,10 @@ authors = ["Universal Connector Contributors"]
 description = "LSP-based universal plugin server for multi-editor document conversion"
 license = "MIT"
 
+[lib]
+name = "universal_connector_server"
+path = "src/lib.rs"
+
 [[bin]]
 name = "universal-connector-server"
 path = "src/main.rs"
@@ -46,6 +50,15 @@ thiserror = "1.0"
 pulldown-cmark = "0.9"  # Markdown parsing
 scraper = "0.18"        # HTML parsing
 html5ever = "0.26"      # HTML serialization
+
+# Extended format support (Platinum RSR)
+serde_yaml = "0.9"      # YAML support
+quick-xml = { version = "0.31", features = ["serialize"] }  # XML support
+toml = "0.8"            # TOML support
+
+# Authentication and security (Platinum RSR)
+jsonwebtoken = "9.2"    # JWT token handling
+bcrypt = "0.15"         # Password hashing
 
 # UUID generation
 uuid = { version = "1.6", features = ["v4", "serde"] }

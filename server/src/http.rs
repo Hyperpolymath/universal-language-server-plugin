@@ -67,7 +67,7 @@ struct ServerStats {
     version: String,
 }
 
-/// Health check response
+/// Health check response (deprecated - use /api/health/detailed)
 #[derive(Debug, Serialize)]
 struct HealthResponse {
     status: String,
@@ -182,12 +182,28 @@ async fn get_stats(State(state): State<Arc<ServerState>>) -> Json<ServerStats> {
     })
 }
 
-/// Health check handler
+/// Health check handler (basic)
 async fn health_check() -> Json<HealthResponse> {
     Json(HealthResponse {
         status: "healthy".to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
     })
+}
+
+/// Detailed health check handler (Platinum RSR)
+async fn detailed_health_check(
+    State(state): State<Arc<ServerState>>,
+) -> Json<crate::monitoring::HealthStatus> {
+    let health = state.health_checker.check(&state.metrics).await;
+    Json(health)
+}
+
+/// Metrics snapshot handler (Platinum RSR)
+async fn get_metrics(
+    State(state): State<Arc<ServerState>>,
+) -> Json<crate::monitoring::MetricsSnapshot> {
+    let snapshot = state.metrics.snapshot();
+    Json(snapshot)
 }
 
 /// Create HTTP router
@@ -200,6 +216,8 @@ fn create_router(state: Arc<ServerState>) -> Router {
         .route("/api/validate", post(validate_document))
         .route("/api/stats", get(get_stats))
         .route("/api/health", get(health_check))
+        .route("/api/health/detailed", get(detailed_health_check))  // Platinum RSR
+        .route("/api/metrics", get(get_metrics))  // Platinum RSR
         .layer(
             CorsLayer::new()
                 .allow_origin(Any)

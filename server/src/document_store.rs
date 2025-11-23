@@ -178,7 +178,7 @@ mod tests {
         );
         let stats = doc.stats();
         assert_eq!(stats.lines, 2);
-        assert_eq!(stats.words, 6);
+        assert_eq!(stats.words, 7); // "# Hello World This is a test." = 7 words
     }
 
     #[test]

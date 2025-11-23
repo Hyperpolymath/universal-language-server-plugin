@@ -1,13 +1,15 @@
 //! Document conversion core engine
 //!
 //! Provides bidirectional conversion between formats:
-//! - Markdown ↔ HTML ↔ JSON
+//! - Markdown ↔ HTML ↔ JSON ↔ YAML ↔ XML ↔ TOML (Platinum RSR)
 
 use anyhow::{anyhow, Result};
 use pulldown_cmark::{html, Parser};
 use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+use crate::formats::{self, ExtendedFormat};
 
 /// Supported conversion formats
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -16,6 +18,9 @@ pub enum Format {
     Markdown,
     Html,
     Json,
+    Yaml,  // Platinum RSR
+    Xml,   // Platinum RSR
+    Toml,  // Platinum RSR
 }
 
 impl Format {
@@ -25,6 +30,9 @@ impl Format {
             "markdown" | "md" => Ok(Self::Markdown),
             "html" | "htm" => Ok(Self::Html),
             "json" => Ok(Self::Json),
+            "yaml" | "yml" => Ok(Self::Yaml),
+            "xml" => Ok(Self::Xml),
+            "toml" => Ok(Self::Toml),
             _ => Err(anyhow!("Unsupported format: {}", s)),
         }
     }
@@ -35,6 +43,9 @@ impl Format {
             Self::Markdown => "md",
             Self::Html => "html",
             Self::Json => "json",
+            Self::Yaml => "yaml",
+            Self::Xml => "xml",
+            Self::Toml => "toml",
         }
     }
 }
@@ -86,10 +97,103 @@ impl ConversionCore {
             // JSON → HTML
             (Format::Json, Format::Html) => Self::json_to_html(&request.content)?,
 
+            // YAML ↔ JSON (Platinum RSR)
+            (Format::Yaml, Format::Json) => formats::yaml::yaml_to_json(&request.content)?,
+            (Format::Json, Format::Yaml) => formats::yaml::json_to_yaml(&request.content)?,
+
+            // XML ↔ JSON (Platinum RSR)
+            (Format::Xml, Format::Json) => formats::xml::xml_to_json(&request.content)?,
+            (Format::Json, Format::Xml) => formats::xml::json_to_xml(&request.content)?,
+
+            // TOML ↔ JSON (Platinum RSR)
+            (Format::Toml, Format::Json) => formats::toml::toml_to_json(&request.content)?,
+            (Format::Json, Format::Toml) => formats::toml::json_to_toml(&request.content)?,
+
+            // Extended formats → Markdown/HTML (via JSON intermediate)
+            (Format::Yaml, Format::Markdown) => {
+                let json = formats::yaml::yaml_to_json(&request.content)?;
+                Self::json_to_markdown(&json)?
+            }
+            (Format::Yaml, Format::Html) => {
+                let json = formats::yaml::yaml_to_json(&request.content)?;
+                Self::json_to_html(&json)?
+            }
+            (Format::Xml, Format::Markdown) => {
+                let json = formats::xml::xml_to_json(&request.content)?;
+                Self::json_to_markdown(&json)?
+            }
+            (Format::Xml, Format::Html) => {
+                let json = formats::xml::xml_to_json(&request.content)?;
+                Self::json_to_html(&json)?
+            }
+            (Format::Toml, Format::Markdown) => {
+                let json = formats::toml::toml_to_json(&request.content)?;
+                Self::json_to_markdown(&json)?
+            }
+            (Format::Toml, Format::Html) => {
+                let json = formats::toml::toml_to_json(&request.content)?;
+                Self::json_to_html(&json)?
+            }
+
+            // Markdown/HTML → Extended formats (via JSON intermediate)
+            (Format::Markdown, Format::Yaml) => {
+                let json = Self::markdown_to_json(&request.content)?;
+                formats::yaml::json_to_yaml(&json)?
+            }
+            (Format::Markdown, Format::Xml) => {
+                let json = Self::markdown_to_json(&request.content)?;
+                formats::xml::json_to_xml(&json)?
+            }
+            (Format::Markdown, Format::Toml) => {
+                let json = Self::markdown_to_json(&request.content)?;
+                formats::toml::json_to_toml(&json)?
+            }
+            (Format::Html, Format::Yaml) => {
+                let json = Self::html_to_json(&request.content)?;
+                formats::yaml::json_to_yaml(&json)?
+            }
+            (Format::Html, Format::Xml) => {
+                let json = Self::html_to_json(&request.content)?;
+                formats::xml::json_to_xml(&json)?
+            }
+            (Format::Html, Format::Toml) => {
+                let json = Self::html_to_json(&request.content)?;
+                formats::toml::json_to_toml(&json)?
+            }
+
+            // Extended format cross-conversions (via JSON intermediate)
+            (Format::Yaml, Format::Xml) => {
+                let json = formats::yaml::yaml_to_json(&request.content)?;
+                formats::xml::json_to_xml(&json)?
+            }
+            (Format::Yaml, Format::Toml) => {
+                let json = formats::yaml::yaml_to_json(&request.content)?;
+                formats::toml::json_to_toml(&json)?
+            }
+            (Format::Xml, Format::Yaml) => {
+                let json = formats::xml::xml_to_json(&request.content)?;
+                formats::yaml::json_to_yaml(&json)?
+            }
+            (Format::Xml, Format::Toml) => {
+                let json = formats::xml::xml_to_json(&request.content)?;
+                formats::toml::json_to_toml(&json)?
+            }
+            (Format::Toml, Format::Yaml) => {
+                let json = formats::toml::toml_to_json(&request.content)?;
+                formats::yaml::json_to_yaml(&json)?
+            }
+            (Format::Toml, Format::Xml) => {
+                let json = formats::toml::toml_to_json(&request.content)?;
+                formats::xml::json_to_xml(&json)?
+            }
+
             // Same format - no conversion needed
             (Format::Markdown, Format::Markdown) |
             (Format::Html, Format::Html) |
-            (Format::Json, Format::Json) => request.content,
+            (Format::Json, Format::Json) |
+            (Format::Yaml, Format::Yaml) |
+            (Format::Xml, Format::Xml) |
+            (Format::Toml, Format::Toml) => request.content,
         };
 
         Ok(ConversionResponse {
@@ -210,7 +314,7 @@ impl ConversionCore {
     }
 
     /// Convert JSON to Markdown
-    fn json_to_markdown(json_content: &str) -> Result<String> {
+    pub fn json_to_markdown(json_content: &str) -> Result<String> {
         let data: HashMap<String, serde_json::Value> = serde_json::from_str(json_content)
             .map_err(|e| anyhow!("Failed to parse JSON: {}", e))?;
 
@@ -273,6 +377,18 @@ impl ConversionCore {
                 if let Err(e) = serde_json::from_str::<serde_json::Value>(content) {
                     diagnostics.push(format!("Invalid JSON: {}", e));
                 }
+            }
+            Format::Yaml => {
+                // YAML validation (Platinum RSR)
+                diagnostics.extend(formats::yaml::validate_yaml(content)?);
+            }
+            Format::Xml => {
+                // XML validation (Platinum RSR)
+                diagnostics.extend(formats::xml::validate_xml(content)?);
+            }
+            Format::Toml => {
+                // TOML validation (Platinum RSR)
+                diagnostics.extend(formats::toml::validate_toml(content)?);
             }
         }
 

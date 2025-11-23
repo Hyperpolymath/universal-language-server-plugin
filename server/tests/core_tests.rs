@@ -182,12 +182,14 @@ fn main() {
     };
 
     let response = ConversionCore::convert(request).unwrap();
+    // eprintln!("Generated HTML:\n{}", response.content);
     assert!(response.content.contains("<h1>"));
     assert!(response.content.contains("<h2>"));
     assert!(response.content.contains("<strong>"));
     assert!(response.content.contains("<em>"));
     assert!(response.content.contains("<li>"));
-    assert!(response.content.contains("<code>"));
+    // pulldown_cmark uses <pre><code> for code blocks
+    assert!(response.content.contains("<pre><code") || response.content.contains("<code>"));
     assert!(response.content.contains("<a"));
 }
 
